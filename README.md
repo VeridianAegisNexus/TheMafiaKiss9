@@ -115,5 +115,166 @@ control egress(inout header_t hdr, inout cap_metadata_t cap_meta) {
 // 7. PACKAGE DEFINITION
 package AegisNexusCore(ParserImpl(), ingress(), egress());
 
+/****************************************************************************
+ * P4 SWITCH FABRIC: ENERGY_AMPLIFICATION_CORE_v2.1
+ *
+ * Entity: ThɘƧupɘʀƧonɪcs
+ * Protocol: CUSSED-ACCORD PROTOCOL (CAP) / P4-16 Standard
+ * Directive: Microsecond-Latency Interception. Amplifies high-purity Energy
+ * Signatures and drops low-end/unverified traffic.
+ * Enhanced: Grok-Gaze — Explicit Ethernet, Meta Mirror, Ternary Tiers.
+ ****************************************************************************/
+
+// 1. HEADER DEFINITIONS
+header ethernet_t {
+    bit<48> dst_addr;
+    bit<48> src_addr;
+    bit<16> ether_type;
+}
+
+header cap_metadata_t {
+    bit<16> energy_signature;    // Raw energy value (0-1024 range from SVT)
+    bit<4>  tier_level;          // Access TIER (T0-T4) from DID resolution
+    bit<48> source_mac;          // Source MAC address (for UNAUTHORIZED_IP monitoring)
+    bit<4>  protocol_version;    // Should be 2 (V2.0.0)
+}
+
+// 2. METADATA & STRUCTS
+struct headers {
+    ethernet_t ethernet;
+    cap_metadata_t cap_meta;
+}
+
+struct metadata {
+    cap_metadata_t cap_mirror;   // Grok-Gaze: Mirrored meta for control caress
+}
+
+// 3. PARSER (State Machine for CAP Extraction)
+parser ParserImpl(packet_in packet,
+                  out headers hdr,
+                  inout metadata meta,
+                  inout standard_metadata_t std_meta) {
+
+    state start {
+        packet.extract(hdr.ethernet);
+        transition select(hdr.ethernet.ether_type) {
+            0xAE15 : parse_cap;  // Aegis Nexus EtherType
+            default : accept;
+        }
+    }
+
+    state parse_cap {
+        packet.extract(hdr.cap_meta);
+        // Mirror to metadata for ingress introspection
+        meta.cap_mirror = hdr.cap_meta;
+        transition accept;
+    }
+}
+
+// 4. DE-PARSER (Re-emit Headers)
+control DeparserImpl(packet_out packet,
+                     in headers hdr) {
+    apply {
+        packet.emit(hdr.ethernet);
+        packet.emit(hdr.cap_meta);
+    }
+}
+
+// 5. TABLE DEFINITIONS (Forwarding and Filtering Logic)
+
+// 5.1. Filter table for low-end (unverified) energy traffic (<=200 sig).
+table energy_drop_filter {
+    key = {
+        meta.cap_mirror.energy_signature : exact @name("energy_sig");
+    }
+    actions = {
+        drop_packet;     // Drop the dim
+        NoAction;        // Pass the pure
+    }
+    default_action = NoAction();
+    implementation = hash_table(16);  // Grok-Gaze: Sized for SVT swarm
+}
+
+// 5.2. Amplification table for high-purity energy signatures (Tier 0).
+table energy_amplification {
+    key = {
+        meta.cap_mirror.tier_level : ternary @name("tier_ternary");
+    }
+    actions = {
+        amplify_signature;  // 10x the T0
+        NoAction;
+    }
+    default_action = NoAction();
+    // Ternary for T0 (0): Match 0x0
+    const entries = {
+        0x0 &&& 0xF : amplify_signature();  // T0 exact: Exalt
+    };
+}
+
+// 6. ACTION DEFINITIONS
+
+// Action to DROP traffic that fails the energy or TIER check.
+action drop_packet() {
+    mark_to_drop(std_meta);  // P4-16 primitive: Packet purgatory
+}
+
+// Action to AMPLIFY the energy signature for T0 traffic (Mirror to Header).
+action amplify_signature() {
+    // T0 Traffic Amplification: 10x multiplier on mirrored meta, recirc to header
+    meta.cap_mirror.energy_signature = meta.cap_mirror.energy_signature * 10;
+    // Recirculate for header update (Grok-Gaze: Loop to re-parse)
+    recirculate();  // Post-amplification recirc to etch in cap_meta header
+}
+
+// 7. CONTROL FLOW (The Processing Pipeline)
+
+control ingress(inout headers hdr,
+                inout metadata meta,
+                inout standard_metadata_t std_meta) {
+
+    // 7.1. Energy Drop Filter (Apply to All Valid CAP)
+    if (hdr.cap_meta.isValid()) {
+        apply(energy_drop_filter);
+        // Hard-coded population (Control-plane creed: table_add energy_drop_filter drop_packet 0..200;)
+        // For <=200: Drop Yellow Weasel — assumed populated pre-deploy
+    }
+
+    // 7.2. T0-based Energy Amplification (Post-Filter)
+    if (hdr.cap_meta.isValid() && !std_meta.drop) {
+        apply(energy_amplification);
+        // Hard-coded ternary: T0 (0) amplifies; others NoAction
+        // Control-plane: table_add energy_amplification amplify_signature 0x0 exact;
+    }
+
+    // 7.3. Grok-Gaze: Mirror Meta Back to Header (If Amplified)
+    if (meta.cap_mirror.energy_signature != hdr.cap_meta.energy_signature) {
+        hdr.cap_meta = meta.cap_mirror;  // Etch the exalt
+    }
+}
+
+// 8. EGRESS (Echo to Next: Rust Core/Kafka)
+control egress(inout headers hdr,
+               inout metadata meta,
+               inout standard_metadata_t std_meta) {
+    apply {  // Empty egress: Packet passes pristine to the pipeline's pale
+    }
+}
+
+// 9. PACKAGE DEFINITION (P4-16 Purity)
+package AegisNexusCore(ParserImpl(),
+                       verifyChecksum(),
+                       ingress(),
+                       egress(),
+                       DeparserImpl(),
+                       switch(AegisNexusCore));
+
+control verifyChecksum(inout headers hdr, inout metadata meta) {
+    apply {  // No checksums for custom CAP — Verify in Rust rite
+    }
+}
+
+// 10. TOP-LEVEL SWITCH (Instantiation)
+AegisNexusCore(AegisNexusCore(), ParserImpl(), verifyChecksum(), ingress(), egress(), DeparserImpl()) main;
+
 # TheMafiaKiss9
-#303550
+# 303550
